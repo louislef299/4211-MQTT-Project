@@ -1,5 +1,0 @@
-Client: <CONN>
-Server: <CONN_ACK>
-PUB
-PUB: news
-	message: 
