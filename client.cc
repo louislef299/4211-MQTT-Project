@@ -16,7 +16,7 @@ using namespace std;
 enum command{CONNECTION,DISCONNECT,PUBLISH,SUBSCRIBE,QUIT,NONE};
 
 command hashit(string& command){
-  for(int i=0;i<command.length();i++)
+  for(int i=0;i<(int)command.length();i++)
     command.at(i) = toupper(command.at(i));
 
   if("CONNECT" == command)
@@ -37,7 +37,7 @@ int make_connection(){
   struct sockaddr_in serv_addr; 
 
   char recvBuff[1024];
-  memset(recvBuff, '0',std::strlen(recvBuff));
+  memset(recvBuff, '0',strlen(recvBuff));
   
   if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
     printf("\n Error : Could not create socket \n");
@@ -79,7 +79,7 @@ int make_connection(){
 
 int publish_mqtt(int sockfd){
   char commandBuff[200];
-  memset(commandBuff, '0',std::strlen(commandBuff));
+  memset(commandBuff, '0',strlen(commandBuff));
   
   char topicNumber;
   char topic[10];
@@ -105,8 +105,10 @@ int publish_mqtt(int sockfd){
       strcpy(topic,"security");
       loop=0;
     }
-    else
+    else{
       std::cout << "Invalid response, please try again\n";
+      topicNum = nullptr;
+    }
   }
 
   char msg[120];

@@ -1,6 +1,6 @@
-CC = g++
+CC = g++ -pthread
 C = gcc
-CC_FLAGS = -Wall -g -c
+CC_FLAGS = -Wall -g -c 
 
 server: server.o
 	$(CC) server.o -o start_server

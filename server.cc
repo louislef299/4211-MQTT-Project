@@ -59,19 +59,19 @@ int check_subs(client _client){
   pthread_mutex_lock(&lock);
   int retval = 0;
   if(_client.subscriptions & 1){
-    if(weather.size()-1 > _client.current[0])
+    if((int)(weather.size()-1) > _client.current[0])
       retval |= 1;
   }
   if(_client.subscriptions & 2){
-    if(news.size()-1 > _client.current[1])
+    if((int)(news.size()-1) > _client.current[1])
       retval |= 2;
   }
   if(_client.subscriptions & 4){
-    if(health.size()-1 > _client.current[2])
+    if((int)(health.size()-1) > _client.current[2])
       retval |= 4;
   }
   if(_client.subscriptions & 8){
-    if(security.size()-1 > _client.current[3])
+    if((int)(security.size()-1) > _client.current[3])
       retval |= 8;
   }
   pthread_mutex_unlock(&lock);
