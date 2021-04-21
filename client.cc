@@ -10,6 +10,7 @@
 #include <arpa/inet.h> 
 #include <iostream>
 #include <string>
+#include <cstring>
 
 using namespace std;
 
@@ -81,14 +82,15 @@ int publish_mqtt(int sockfd){
   char commandBuff[200];
   memset(commandBuff, '0',strlen(commandBuff));
   
-  char topicNumber;
+  string topicNumber;
   char topic[10];
   int loop = 1;
+  int topicNum = 0;
   while(loop){
     std::cout << "Please choose a topic(type a number):\n[1] Weather\n[2] News\n[3] Health\n[4] Security\n";
     
-    std::cin >> topicNumber;
-    int topicNum = topicNumber - '0';
+    scanf("%d",&topicNum);
+    std::cout << "echo: " << topicNumber << '\n';
     if(topicNum == 1){
       strcpy(topic,"weather");
       loop=0;
@@ -107,13 +109,18 @@ int publish_mqtt(int sockfd){
     }
     else{
       std::cout << "Invalid response, please try again\n";
-      topicNum = nullptr;
     }
   }
 
-  char msg[120];
+  char msg[1200],buffer[50];
   std::cout << "What message would you like to publish?\nPublication(max 100 characters): ";
-  std::cin.get(msg,120);
+  while(1){
+    scanf("%s",buffer);
+    if(strcmp(buffer,"exit")==0)
+      break;
+    strcat(msg,buffer);
+    strcat(msg," ");
+  }
   
   strcpy(commandBuff,"PUB,");
   strcat(commandBuff,topic);
@@ -121,6 +128,7 @@ int publish_mqtt(int sockfd){
   //need to change message to a char*
   strcat(commandBuff,msg);
   write(sockfd,commandBuff,strlen(commandBuff));
+  memset(msg, '\0',strlen(msg));
   printf("Your sent package: %s\n",commandBuff);
   
   return 0;
