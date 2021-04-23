@@ -1,18 +1,16 @@
 CC = g++ -pthread
 C = gcc
-CC_FLAGS = -Wall -g -c 
+CFLAGS = -Wall -g -c 
+DEPS = socket.h
 
-server: server.o
-	$(CC) server.o -o start_server
+%.o: %.cc $(DEPS)
+	$(CC) -c -o $@ $< $(CFLAGS)
 
-client: client.o
-	$(CC) client.o -o start_client
+server: server.o socket.o
+	$(CC) server.o socket.o -o start_server
 
-server.o: server.cc
-	$(CC) $(CC_FLAGS) server.cc -o server.o
-
-client.o: client.cc
-	$(CC) $(CC_FLAGS) client.cc -o client.o
+client: client.o socket.o
+	$(CC) client.o socket.o -o start_client
 
 clean:
 	rm -f *.o *~ start_client start_server connections_log.txt
