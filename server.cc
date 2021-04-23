@@ -2,7 +2,7 @@
 
 struct client{
   pthread_t tid;
-  int socket,msg_port;
+  int socket;
   /****************************************************** 
      this is to store current subscriptions
      [0001 - weather]
@@ -16,6 +16,8 @@ struct client{
 
 pthread_mutex_t lock;
 
+int current_port = 5000;
+
 std::ofstream output_log;
 
 std::vector<client> weather;
@@ -23,13 +25,9 @@ std::vector<client> news;
 std::vector<client> health;
 std::vector<client> security;
 
-int topic_sockets[4] = {0,0,0,0};
-
 Socket *socket_helper = new Socket();
 
-void subscription_handler(client _client){
-  char recvBuff[1000];
-  memset(recvBuff, '0',strlen(recvBuff));
+void subscription_handler(client _client,char* recvBuff){
   char *topic,*rest;
   rest = recvBuff;
   int iteration = 0;
@@ -39,37 +37,18 @@ void subscription_handler(client _client){
       output_log << "Client"<< _client.socket << ": <SUB,TOPIC>\nTopic: " << topic << "\n\n";
       output_log.flush();
 
-      int sendSock = 0;
       if(strstr(topic,"weather") != NULL){
 	temp = &weather;
-	if(topic_sockets[0] == 0)
-	  topic_sockets[0] = socket_helper->set_up_socket(5001);
-	sendSock = topic_sockets[0];
       }
       else if(strstr(topic,"news") != NULL){
 	temp = &news;
-	if(topic_sockets[1] == 0)
-	  topic_sockets[1] = socket_helper->set_up_socket(5002);
-	sendSock = topic_sockets[1];
       }
       else if(strstr(topic,"health") != NULL){
 	temp = &health;
-	if(topic_sockets[2] == 0)
-	  topic_sockets[2] = socket_helper->set_up_socket(5003);
-	sendSock = topic_sockets[2];
       }
       else if(strstr(topic,"security") != NULL){
 	temp = &security;
-	if(topic_sockets[3] == 0)
-	  topic_sockets[3] = socket_helper->set_up_socket(5004);
-	sendSock = topic_sockets[3];
       }
-      sprintf(recvBuff,"%d",sendSock);
-      output_log << "Sending socket to Client" << _client.socket << " for " << topic << ": " << sendSock << " with atoi(" << atoi(recvBuff) << ")\n\n";
-      output_log.flush();
-      _client.msg_port = sendSock;
-      write(_client.socket,recvBuff,strlen(recvBuff));
-
       temp->push_back(_client);
     }
     iteration++;
@@ -87,9 +66,7 @@ int disconnect_handler(client _client){
   return 0;
 }
 
-void publish_handler(client _client){
-  char recvBuff[1000];
-  memset(recvBuff, '0',strlen(recvBuff));
+void publish_handler(client _client,char* recvBuff){
   char *topic,*rest;
   rest = recvBuff;
   int iteration = 0;
@@ -114,7 +91,7 @@ void publish_handler(client _client){
       output_log.flush();
 
       for(int i=0;i<temp->size();i++)
-	write(temp->at(i).client_pipe[1],topic,sizeof(topic)-1);
+	write(temp->at(i).socket,topic,sizeof(topic)+1);
     }
     iteration++;  
   }
@@ -127,33 +104,29 @@ void *thread_function(void* command){
     exit(1);
 
   char recvBuff[1000];
-  memset(recvBuff, '0',strlen(recvBuff));
-  int n,m,loop_break;
+  memset(recvBuff, '\0',strlen(recvBuff));
+  int n,loop_break;
 
   for(int i=0;i<4;i++)
     _client.subscriptions = 0b0000;
 
   loop_break = 1;
   while(loop_break){
-    while((n=read(_client.socket,recvBuff,sizeof(recvBuff)-1))>0 || (m=read(_client.client_pipe[0],recvBuff,sizeof(recvBuff)-1))>0){
+    while((n=read(_client.socket,recvBuff,sizeof(recvBuff)-1))>0){
       pthread_mutex_lock(&lock);
       if(n){
 	if(strstr(recvBuff,"PUB")!=NULL){
-	  publish_handler(_client);
+	  publish_handler(_client,recvBuff);
 	}
 	if(strstr(recvBuff,"DISC")!=NULL){
 	  loop_break = disconnect_handler(_client);
 	}
 	if(strstr(recvBuff,"SUB")!=NULL){
-	  subscription_handler(_client);
+	  subscription_handler(_client,recvBuff);
 	}
       }
-      if(m){
-	output_log << "Sending message to Client" << _client.socket << "\n" << recvBuff << "\n\n";
-	output_log.flush();
-	write(_client.msg_port,recvBuff,strlen(recvBuff));
-      }
       pthread_mutex_unlock(&lock);
+      memset(recvBuff, '\0',strlen(recvBuff));
     }
   }
   close(_client.socket);
@@ -166,7 +139,7 @@ int main(int argc, char *argv[]){
   output_log.open("connections_log.txt");
 
   listenfd = socket_helper->set_up_socket();
-    
+  
   client clients[100];
   char sendBuff[1025];
   memset(sendBuff, '0', sizeof(sendBuff)); 

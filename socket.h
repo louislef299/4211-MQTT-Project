@@ -19,6 +19,7 @@
 #include <vector>
 #include <string>
 #include <cstring>
+#include <poll.h>
 
 class Socket{
 public:

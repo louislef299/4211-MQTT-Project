@@ -1,6 +1,6 @@
 CC = g++ -pthread
 C = gcc
-CFLAGS = -Wall -g -c 
+CFLAGS = -Wall -g -c -Wc++11-extensions 
 DEPS = socket.h
 
 %.o: %.cc $(DEPS)
