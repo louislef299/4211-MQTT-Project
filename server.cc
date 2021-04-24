@@ -91,7 +91,7 @@ void publish_handler(client _client,char* recvBuff){
       output_log << topic << "\n\n";
       output_log.flush();
 
-      for(int i=0;i<temp->size();i++){
+      for(int i=0;i<(int)(temp->size());i++){
 	if(write(temp->at(i).socket,topic,sizeof(topic)+1) < 0)
 	  output_log << "Write Failure\n";
 	output_log<<"Writing to Client" << temp->at(i).socket << " with message " << topic << "\n\n";

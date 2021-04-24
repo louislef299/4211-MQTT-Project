@@ -185,12 +185,10 @@ int main(int argc, char *argv[]){
   int cont = 1;
   int sockfd = -1;
   pthread_t tid;
-  if(pipe(custom_pipe) == -1){
-    output_log << "Couldn't create pipe\n";
-    output_log.flush();
-  }
   char commandBuff[200];
-  
+  if(pipe(custom_pipe) == -1)
+    std::cout << "Couldn't create pipe\n";
+    
   while(cont){    
     std::cout << "Please write a command: ";
     fgets(commandBuff, 100, stdin);
@@ -244,8 +242,7 @@ int main(int argc, char *argv[]){
 
     if(canReadFromPipe() && cont != 0){
       memset(commandBuff, '\0',strlen(commandBuff));
-      int n;
-      n = read(custom_pipe[0], commandBuff, sizeof(commandBuff)-1);
+      read(custom_pipe[0], commandBuff, sizeof(commandBuff)-1);
       std::cout << "\n\nNew message: " << commandBuff << '\n';
     }
     
