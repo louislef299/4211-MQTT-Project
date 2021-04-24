@@ -30,19 +30,12 @@ command hashit(string& command){
 }
 
 bool canReadFromPipe(){
-  //file descriptor struct to check if POLLIN bit will be set
-  //fd is the file descriptor of the pipe
   struct pollfd fds;
   fds.fd = custom_pipe[0];
   fds.events = POLLIN;
-  //poll with no wait time
   int res = poll(&fds, 1, 0);
 
-  //if res < 0 then an error occurred with poll
-  //POLLERR is set for some other errors
-  //POLLNVAL is set if the pipe is closed
-  if(res < 0||fds.revents&(POLLERR|POLLNVAL))
-    {
+  if(res < 0||fds.revents&(POLLERR|POLLNVAL)){
       //an error occurred, check errno
     }
   return fds.revents&POLLIN;
@@ -50,39 +43,37 @@ bool canReadFromPipe(){
 
 void *thread_function(void *input){
   pthread_detach(pthread_self());
-  int socket = *((int *)input);
+  int listenfd = *((int *)input);
 
-  int listenfd = socket;//_helper->make_connection(socket);
+  output_log << "Listener thread " << listenfd << " up and running\n\n";
+  output_log.flush();
+  
   if(listenfd < 0){
     cout << "Invalid socket\n";
     return input;
   }
   
   char recvBuff[200];
-  memset(recvBuff, '0',strlen(recvBuff));
-  int n;
+  memset(recvBuff, '\0',strlen(recvBuff));
+  int n = 0;
 
   while(1){
-    while((n = read(socket, recvBuff, sizeof(recvBuff)-1)) > 0){	  
-      pthread_mutex_lock(&mutex_lock);
-      write(custom_pipe[1],recvBuff,sizeof(recvBuff)-1);
+    while((n = read(listenfd, recvBuff, strlen(recvBuff))) > 0){	  
+      write(custom_pipe[1],recvBuff,strlen(recvBuff));
       output_log << "Message received: " << recvBuff << "\n";
       output_log.flush();
-      pthread_mutex_unlock(&mutex_lock);
     }
   }
   return input;
 }
 
-pthread_t publish_mqtt(int sockfd,bool just_topic=false){
+void publish_mqtt(int sockfd,bool just_topic=false){
   char commandBuff[200];
   memset(commandBuff, '0',strlen(commandBuff));
   
   char topic[10];
   int loop = 1;
   int topicNum;
-  pthread_t tid;
-  int testport;
   while(loop){
     std::cout << "Please choose a topic(type a number):\n[1] Weather\n[2] News\n[3] Health\n[4] Security\n";
 
@@ -113,12 +104,12 @@ pthread_t publish_mqtt(int sockfd,bool just_topic=false){
       scanf("%*s");
     }
   }
-  testport = 5000 + topicNum;
 
   if(!just_topic){
     char msg[1200],buffer[50];
     std::cout << "What message would you like to publish(max 1000 characters)?\nPublication(Type 'exit' to finish publication): ";
     int size_check = 0;
+    memset(msg, '\0',strlen(msg));
     while(1){
       scanf("%s",buffer);
       if(strcmp(buffer,"exit")==0)
@@ -149,12 +140,11 @@ pthread_t publish_mqtt(int sockfd,bool just_topic=false){
       std::cout << "Write failure, trying again...\n";
 
     printf("Your sent package: %s\n",commandBuff);
-    pthread_create(&tid,NULL,thread_function,(void *)&sockfd);
-
-    return tid;
+  
+    return;
 
   }
-  return (pthread_t)0;
+  return;
 }
 
 void disconnect_mqtt(int sockfd){
@@ -168,8 +158,11 @@ void disconnect_mqtt(int sockfd){
   memset(commandBuff, '0',strlen(commandBuff));
   
   int n,fd;
-  if(!canReadFromPipe())
+  if(!canReadFromPipe()){
     fd = sockfd;
+    output_log << "Can't read from pipe!\n";
+    output_log.flush();
+  }
   else
     fd = custom_pipe[0];
   
@@ -177,6 +170,7 @@ void disconnect_mqtt(int sockfd){
     if(strstr(commandBuff,"DISC_ACK")!=NULL)
       break;
   }
+  close(sockfd);
   if(n < 0){
     printf("\n Read error \n");
   }
@@ -190,11 +184,13 @@ int main(int argc, char *argv[]){
   
   int cont = 1;
   int sockfd = -1;
-  pthread_t tid[4];
-  int whereTid=0;
-  pipe(custom_pipe);
+  pthread_t tid;
+  if(pipe(custom_pipe) == -1){
+    output_log << "Couldn't create pipe\n";
+    output_log.flush();
+  }
   char commandBuff[200];
-      
+  
   while(cont){    
     std::cout << "Please write a command: ";
     fgets(commandBuff, 100, stdin);
@@ -211,14 +207,17 @@ int main(int argc, char *argv[]){
 	output_log.open(commandBuff);
 	if(sockfd == -1)
 	  std::cout << "Unsuccessful Connection\n";
-	else
-	  std::cout << "Successful Connection\n";
+	else{
+	  std::cout << "Successful Connection on sockect " << sockfd << "\n";
+	  pthread_create(&tid,NULL,thread_function,(void *)&sockfd);
+	}
       }
       break;
     case DISCONNECT:
       if(sockfd != -1){
 	disconnect_mqtt(sockfd);
-	std::cout << "Successful Disconnection\n";
+	std::cout << "Successful Disconnection, all channels successfully unsubscribed\n";
+        pthread_cancel(tid);
       }else{
 	std::cout << "No prior connection was made\n";
       }
@@ -228,15 +227,15 @@ int main(int argc, char *argv[]){
       publish_mqtt(sockfd);
       break;
     case SUBSCRIBE:
-      tid[whereTid] = publish_mqtt(sockfd,true);
-      whereTid++;
+      publish_mqtt(sockfd,true);
       break;
     case QUIT:
       if(sockfd != -1)
 	disconnect_mqtt(sockfd);
       cont = 0;
-      for(int i=0;i<whereTid;i++)
-	pthread_cancel(tid[i]);
+      pthread_cancel(tid);
+      close(custom_pipe[0]);
+      close(custom_pipe[1]);
       break;
     default:
       std::cout << "Invalid command, please try again\n";
