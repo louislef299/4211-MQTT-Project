@@ -20,6 +20,7 @@
 #include <string>
 #include <cstring>
 #include <poll.h>
+#include <fcntl.h>
 
 class Socket{
 public:
@@ -27,9 +28,9 @@ public:
 
   void enable_keepalive(int sock);
 
-  int set_up_socket(int port=5000);
-
   int make_connection(int port = 5000);
+
+  bool canReadFromPipe();
 };
 
 #endif // SOCKET_H

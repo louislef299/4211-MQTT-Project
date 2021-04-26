@@ -5,6 +5,7 @@ Socket::Socket(){}
 void Socket::enable_keepalive(int sock){
   int yes = 1;
   setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &yes, sizeof(int));
+  setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
 
   int interval = 1;
   setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(int));
@@ -25,7 +26,7 @@ int Socket::make_connection(int port){
     return -1;
   } 
 
-  memset(&serv_addr, '0', sizeof(serv_addr)); 
+  //memset(&serv_addr, '0', sizeof(serv_addr)); 
 
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_port = htons(port); 
@@ -40,6 +41,8 @@ int Socket::make_connection(int port){
     return -1;
   } 
 
+  std::cout << "Connection on socket " << sockfd << "\n";
+  
   int n;
   char commandBuff[100];
   
@@ -54,26 +57,19 @@ int Socket::make_connection(int port){
     printf("\n Read error \n");
   } 
 
-  
+  std::cout << "sockfd from make_connection(): " << sockfd << "\n";
   return sockfd;
 }
 
-int Socket::set_up_socket(int port){
-  int listenfd;
-  struct sockaddr_in serv_addr; 
+bool canReadFromPipe(int *custom_pipe){
+  struct pollfd fds;
+  fds.fd = custom_pipe[0];
+  fds.events = POLLIN;
+  int res = poll(&fds, 1, 0);
 
-  listenfd = socket(AF_INET, SOCK_STREAM, 0);
-  memset(&serv_addr, '0', sizeof(serv_addr));
-
-  serv_addr.sin_family = AF_INET;
-  serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  serv_addr.sin_port = htons(port); 
-
-  enable_keepalive(listenfd);
-    
-  bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)); 
-
-  listen(listenfd, 10);
-  return listenfd;
+  if(res < 0||fds.revents&(POLLERR|POLLNVAL)){
+      //an error occurred, check errno
+    }
+  return fds.revents&POLLIN;
 }
 

@@ -6,11 +6,7 @@ std::ofstream output_log;
 
 enum command{CONNECTION,DISCONNECT,PUBLISH,SUBSCRIBE,QUIT,NONE};
 
-pthread_mutex_t mutex_lock;
-
 Socket *socket_helper = new Socket();
-
-int custom_pipe[2];
 
 command hashit(string& command){
   for(int i=0;i<(int)command.length()-1;i++)
@@ -27,44 +23,6 @@ command hashit(string& command){
   if("QUIT\n" == command)
     return QUIT;
   return NONE;
-}
-
-bool canReadFromPipe(){
-  struct pollfd fds;
-  fds.fd = custom_pipe[0];
-  fds.events = POLLIN;
-  int res = poll(&fds, 1, 0);
-
-  if(res < 0||fds.revents&(POLLERR|POLLNVAL)){
-      //an error occurred, check errno
-    }
-  return fds.revents&POLLIN;
-}
-
-void *thread_function(void *input){
-  pthread_detach(pthread_self());
-  int listenfd = *((int *)input);
-
-  output_log << "Listener thread " << listenfd << " up and running\n\n";
-  output_log.flush();
-  
-  if(listenfd < 0){
-    cout << "Invalid socket\n";
-    return input;
-  }
-  
-  char recvBuff[200];
-  memset(recvBuff, '\0',strlen(recvBuff));
-  int n = 0;
-
-  while(1){
-    while((n = read(listenfd, recvBuff, strlen(recvBuff))) > 0){	  
-      write(custom_pipe[1],recvBuff,strlen(recvBuff));
-      output_log << "Message received: " << recvBuff << "\n";
-      output_log.flush();
-    }
-  }
-  return input;
 }
 
 void publish_mqtt(int sockfd,bool just_topic=false){
@@ -157,16 +115,8 @@ void disconnect_mqtt(int sockfd){
 
   memset(commandBuff, '0',strlen(commandBuff));
   
-  int n,fd;
-  if(!canReadFromPipe()){
-    fd = sockfd;
-    output_log << "Can't read from pipe!\n";
-    output_log.flush();
-  }
-  else
-    fd = custom_pipe[0];
-  
-  while((n = read(fd, commandBuff, sizeof(commandBuff)-1)) > 0){
+  int n;
+  while((n = read(sockfd, commandBuff, sizeof(commandBuff)-1)) > 0){
     if(strstr(commandBuff,"DISC_ACK")!=NULL)
       break;
   }
@@ -183,12 +133,10 @@ int main(int argc, char *argv[]){
   std::cout << "Welcome to the Project 1 Publishing service!\n";
   
   int cont = 1;
-  int sockfd = -1;
-  pthread_t tid;
+  int sockfd;
   char commandBuff[200];
-  if(pipe(custom_pipe) == -1)
-    std::cout << "Couldn't create pipe\n";
-    
+
+  sockfd = -1;
   while(cont){    
     std::cout << "Please write a command: ";
     fgets(commandBuff, 100, stdin);
@@ -199,7 +147,7 @@ int main(int argc, char *argv[]){
       if(sockfd != -1)
 	std::cout << "Already connected!\n";
       else{
-	sockfd = socket_helper->make_connection();
+	sockfd = socket_helper->make_connection(8080);
 	memset(commandBuff, '\0',strlen(commandBuff));
 	sprintf(commandBuff,"client_connections_log%d.txt",sockfd);
 	output_log.open(commandBuff);
@@ -207,7 +155,6 @@ int main(int argc, char *argv[]){
 	  std::cout << "Unsuccessful Connection\n";
 	else{
 	  std::cout << "Successful Connection on sockect " << sockfd << "\n";
-	  pthread_create(&tid,NULL,thread_function,(void *)&sockfd);
 	}
       }
       break;
@@ -215,7 +162,6 @@ int main(int argc, char *argv[]){
       if(sockfd != -1){
 	disconnect_mqtt(sockfd);
 	std::cout << "Successful Disconnection, all channels successfully unsubscribed\n";
-        pthread_cancel(tid);
       }else{
 	std::cout << "No prior connection was made\n";
       }
@@ -231,20 +177,29 @@ int main(int argc, char *argv[]){
       if(sockfd != -1)
 	disconnect_mqtt(sockfd);
       cont = 0;
-      pthread_cancel(tid);
-      close(custom_pipe[0]);
-      close(custom_pipe[1]);
       break;
     default:
       std::cout << "Invalid command, please try again\n";
       break;	
     }
 
+    int n;
+    char recvBuff[200];
+    memset(recvBuff, '\0',strlen(recvBuff));  
+    if((n = read(sockfd, recvBuff, strlen(recvBuff))) > 0){	  
+      output_log << "Message received: " << recvBuff;
+      while((n = read(sockfd, recvBuff, strlen(recvBuff))) > 0){
+	output_log << recvBuff;
+      }
+      output_log << "\n";
+      output_log.flush();
+    }
+    /*
     if(canReadFromPipe() && cont != 0){
       memset(commandBuff, '\0',strlen(commandBuff));
       read(custom_pipe[0], commandBuff, sizeof(commandBuff)-1);
       std::cout << "\n\nNew message: " << commandBuff << '\n';
-    }
+      }*/
     
   }
   
