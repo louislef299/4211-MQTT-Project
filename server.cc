@@ -74,7 +74,7 @@ void publish_handler(int client,char* recvBuff){
       output_log << topic << "\n\n";
       output_log.flush();
       
-      for(int i=0;i<temp->size();i++){
+      for(int i=0;i<(int)temp->size();i++){
 	int n;
 	if((n = write(temp->at(i),topic,sizeof(topic))) < 0)
 	  output_log << "Write Failure\n";
