@@ -29,69 +29,30 @@ command hashit(string& command){
   return NONE;
 }
 
-void publish_mqtt(int sockfd,bool just_topic=false){
-  char topic[10];
-  int loop = 1;
-  int topicNum,retain;
-  while(loop){
-    std::cout << "Please choose a topic(type a number):\n[1] Weather\n[2] News\n[3] Health\n[4] Security\n";
-
-    int e;
-    while((e = scanf("%d",&topicNum)) < 1){
-      std::cout << "Invalid response, please try again\n";
-      scanf("%*s");
-    }
-    
-    if(topicNum == 1){
-      strcpy(topic,"weather");
-      loop=0;
-    }
-    else if(topicNum == 2){
-      strcpy(topic,"news");
-      loop=0;
-    }
-    else if(topicNum == 3){
-      strcpy(topic,"health");
-      loop=0;
-    }
-    else if(topicNum == 4){
-      strcpy(topic,"security");
-      loop=0;
-    }
-    else{
-      std::cout << "Invalid response, please try again\n";
-      scanf("%*s");
-    }
-  }
-
+void publish_mqtt(int sockfd,bool just_topic=false,bool unsub=false){
+  char topic[50],msg[1200],buffer[50],commandBuff[2000];
+  int retain;
+  
+  std::cout << "Please type your desired topic: ";
+  memset(topic,'\0',strlen(topic));
+  fgets(topic, 50, stdin);
+  std::cout << "\n";
   if(!just_topic){   
-    char msg[1200],buffer[50],commandBuff[2000];
     memset(commandBuff, '\0',strlen(commandBuff));  
-
-    std::cout << "Would you like this message to be retained?(yes or no)";
+    std::cout << "Would you like this message to be retained?(yes or no): ";
     fgets(buffer, 50, stdin);
     if(strstr(buffer,"y") != NULL)
       retain = 1;
     else
       retain = 0;
     memset(buffer,'\0',strlen(buffer));
-    
-    std::cout << "What message would you like to publish(max 1000 characters)?\nPublication(Type 'exit' to finish publication): ";
-    int size_check = 0;
+    std::cout << "\n";
+    std::cout << "What message would you like to publish(max 1000 characters)?\nPublication: ";
+
     memset(msg, '\0',strlen(msg));
-    while(1){
-      scanf("%s",buffer);
-      if(buffer[strlen(buffer)] == '\n' || strcmp("exit",buffer) == 0)
-	break;
-      size_check += strlen(buffer)+1;
-      if(size_check > 1000){
-	std::cout << "Publication is too large!\n";
-	break;
-      }
-      strcat(msg,buffer);
-      strcat(msg," ");
-    }
-  
+    fgets(msg,1200,stdin);
+    std::cout << "\n";
+
     strcpy(commandBuff,"PUB,");
     strcat(commandBuff,topic);
     strcat(commandBuff,",");
@@ -102,8 +63,7 @@ void publish_mqtt(int sockfd,bool just_topic=false){
     memset(msg, '\0',strlen(msg));
     printf("Your sent package: %s\n",commandBuff);
 
-  }else{
-    char commandBuff[50];
+  }else if(!unsub){
     memset(commandBuff, '\0',strlen(commandBuff));  
     strcpy(commandBuff,"SUB,");
     strcat(commandBuff,topic);
@@ -112,11 +72,50 @@ void publish_mqtt(int sockfd,bool just_topic=false){
       std::cout << "Write failure, trying again...\n";
 
     printf("Your sent package: %s\n",commandBuff);
+
+    sleep(1);
+    
+    int n;
+    while((n = read(sockfd, commandBuff, sizeof(commandBuff)-1)) > 0){
+      if(strstr(commandBuff,"SUCCESS")!=NULL){
+	output_log << "Successful subscription\n\n";
+	break;
+      }
+      if(strstr(commandBuff,"ERROR")!=NULL){
+	output_log << "Error with subscription\n\n";
+	break;
+      }
+    }
+    output_log.flush();
   
     return;
+  }else{
+    memset(commandBuff, '\0',strlen(commandBuff));  
+    strcpy(commandBuff,"UNSUB,");
+    strcat(commandBuff,topic);
+    
+    while(write(sockfd,commandBuff,sizeof(commandBuff)) < 0)
+      std::cout << "Write failure, trying again...\n";
 
+    printf("Your sent package: %s\n",commandBuff);
+
+    sleep(1);
+    
+    int n;
+    while((n = read(sockfd, commandBuff, sizeof(commandBuff)-1)) > 0){
+      if(strstr(commandBuff,"SUCCESS")!=NULL){
+	output_log << "Successful unsubscription\n\n";
+	break;
+      }
+      if(strstr(commandBuff,"ERROR")!=NULL){
+	output_log << "Error with unsubscription\n\n";
+	break;
+      }
+    }
+    output_log.flush();
+  
+    return;
   }
-  return;
 }
 
 void disconnect_mqtt(int sockfd){

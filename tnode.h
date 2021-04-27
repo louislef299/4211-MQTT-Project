@@ -17,11 +17,11 @@ public:
 
   TNode *findTNode(std::string name,int *isParent);
   
-  void addSubscriber(std::string topic,int sub);
+  int addSubscriber(std::string topic,int sub);
 
   void directAddSubscriber(int sub);
 
-  void removeSubscriber(std::string topic,int sub);
+  int removeSubscriber(std::string topic,int sub);
   
   void directRemoveSubscriber(int sub);
   

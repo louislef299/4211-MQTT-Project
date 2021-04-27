@@ -7,39 +7,68 @@ TNode *homepage;
 
 Socket *socket_helper = new Socket();
 
+void send_error(int client){
+  char recvBuff[20];
+  memset(recvBuff, '0',strlen(recvBuff));
+  strcpy(recvBuff,"ERROR");
+  write(client,recvBuff,strlen(recvBuff));
+  output_log << "Server: <ERROR>\n\n";
+  output_log.flush();
+}
+
+void send_success(int client){
+  char recvBuff[20];
+  memset(recvBuff, '0',strlen(recvBuff));
+  strcpy(recvBuff,"SUCCESS");
+  write(client,recvBuff,strlen(recvBuff));
+  output_log << "Server: <SUCCESS>\n\n";
+  output_log.flush();
+}
+
 void subscription_handler(int client,char* recvBuff){
   char *topic,*rest;
   rest = recvBuff;
-  int iteration = 0;
+  int iteration = 0,check;
   while((topic = strtok_r(rest,",",&rest))){
     if(iteration == 1){
       output_log << "Client"<< client << ": <SUB,TOPIC>\nTopic: " << topic << "\n\n";
       output_log.flush();
       std::string tnode_topic(topic);
-      homepage->addSubscriber(tnode_topic,client);
+      check = homepage->addSubscriber(tnode_topic,client);
     }  
     iteration++;
   }
+
+  if(check == 0)
+    send_success(client);
+  else
+    send_error(client);
+  
 }
 
 void unsubscribe_handler(int client,char* recvBuff){
   char *topic,*rest;
   rest = recvBuff;
-  int iteration = 0;
+  int iteration = 0,check;
   while((topic = strtok_r(rest,",",&rest))){
     if(iteration == 1){
       output_log << "Client"<< client << ": <UNSUB,TOPIC>\nTopic: " << topic << "\n\n";
       output_log.flush();
       std::string tnode_topic(topic);
-      homepage->removeSubscriber(tnode_topic,client);
+      check = homepage->removeSubscriber(tnode_topic,client);
     }  
     iteration++;
   }
+
+  if(check == 0)
+    send_success(client);
+  else
+    send_error(client);
+  
 }
 
 int disconnect_handler(int client){
-  char recvBuff[1000];
-  memset(recvBuff, '0',strlen(recvBuff));
+  char recvBuff[20];
   memset(recvBuff, '0',strlen(recvBuff));
   strcpy(recvBuff,"DISC_ACK");
   write(client,recvBuff,strlen(recvBuff));

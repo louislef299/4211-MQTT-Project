@@ -79,28 +79,33 @@ TNode *TNode::findTNode(std::string name,int *isParent){
   return nullptr;
 }
 
-void TNode::addSubscriber(std::string topic,int sub){
+int TNode::addSubscriber(std::string topic,int sub){
   int *isParent = 0;
   TNode *temp = this->findTNode(topic,isParent);
-  if(temp != nullptr && *isParent == 0)
+  if(temp != nullptr && *isParent == 0){
     temp->directAddSubscriber(sub);
+    return 0;
+  }
   else if(*isParent == 1){
     TNode *newTopic = temp->addTopic(topic);
     newTopic->directAddSubscriber(sub);
+    return 0;
   }
-  return;
+  return -1;
 }
 
 void TNode::directAddSubscriber(int sub){
   subscribers.push_back(sub);
 }
 
-void TNode::removeSubscriber(std::string topic,int sub){
+int TNode::removeSubscriber(std::string topic,int sub){
   int *isParent = 0;
   TNode *temp = this->findTNode(topic,isParent);
-  if(temp != nullptr && *isParent == 0)
+  if(temp != nullptr && *isParent == 0){
     temp->directRemoveSubscriber(sub);
-  return;
+    return 0;
+  }
+  return -1;
 }
 
 void TNode::directRemoveSubscriber(int sub){
