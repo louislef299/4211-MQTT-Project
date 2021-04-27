@@ -26,9 +26,6 @@ command hashit(string& command){
 }
 
 void publish_mqtt(int sockfd,bool just_topic=false){
-  char commandBuff[200];
-  memset(commandBuff, '0',strlen(commandBuff));
-  
   char topic[10];
   int loop = 1;
   int topicNum;
@@ -63,8 +60,9 @@ void publish_mqtt(int sockfd,bool just_topic=false){
     }
   }
 
-  if(!just_topic){
-    char msg[1200],buffer[50];
+  if(!just_topic){   
+    char msg[1200],buffer[50],commandBuff[2000];
+    memset(commandBuff, '\0',strlen(commandBuff));  
     std::cout << "What message would you like to publish(max 1000 characters)?\nPublication(Type 'exit' to finish publication): ";
     int size_check = 0;
     memset(msg, '\0',strlen(msg));
@@ -92,6 +90,8 @@ void publish_mqtt(int sockfd,bool just_topic=false){
     printf("Your sent package: %s\n",commandBuff);
 
   }else{
+    char commandBuff[50];
+    memset(commandBuff, '\0',strlen(commandBuff));  
     strcpy(commandBuff,"SUB,");
     strcat(commandBuff,topic);
     
@@ -138,20 +138,12 @@ int main(int argc, char *argv[]){
   std::cout << "Welcome to the Project 1 Publishing service!\n";
   
   int cont = 1;
-  int sockfd,activity;
+  int sockfd,timeout,nfds = 1,on = 1,rc;
   char commandBuff[200];
-  struct timeval tv;
-  tv.tv_sec = 0;
-  tv.tv_usec = 1000;
-
-  fd_set readfds;
+  struct pollfd fds;
   
   sockfd = -1;
   while(cont){    
-    FD_ZERO(&readfds);
-    if(sockfd != -1)
-      FD_SET(sockfd,&readfds);
-    
     std::cout << "Please write a command: ";
     fgets(commandBuff, 100, stdin);
     string command(commandBuff);
@@ -168,10 +160,14 @@ int main(int argc, char *argv[]){
 	if(sockfd == -1)
 	  std::cout << "Unsuccessful Connection\n";
 	else{
-	  FD_SET(sockfd,&readfds);
 	  std::cout << "Successful Connection on sockect " << sockfd << "\n";
 	  output_log << "Successful Connection on sockect " << sockfd << "\n";
 	  output_log.flush();
+	  memset(&fds,'0',sizeof(fds));
+	  fds.fd = sockfd;
+	  fds.events = POLLIN;
+	  timeout = 100;
+	  rc = ioctl(sockfd, FIONBIO, (char *)&on);
 	}
       }
       break;
@@ -195,26 +191,25 @@ int main(int argc, char *argv[]){
 	disconnect_mqtt(sockfd);
       cont = 0;
       output_log.close();
+      sockfd = -1;
       break;
     default:
       std::cout << "Invalid command, please try again\n";
       break;	
     }
 
-    
-    activity = select(sockfd+1,&readfds,NULL,NULL,&tv);
-    
-    if(FD_ISSET(sockfd,&readfds)){	  
-      int n;
-      char recvBuff[200];
-      memset(recvBuff, '\0',strlen(recvBuff));
-      std::cout << "Message received: " << recvBuff;
+    int n;
+    char recvBuff[200];
+    memset(recvBuff, '\0',strlen(recvBuff));
+    if(((rc = poll(&fds,nfds,timeout)) > 0) && sockfd != -1){
       while((n = read(sockfd, recvBuff, sizeof(recvBuff)-1)) > 0){
-	std::cout << recvBuff;
+	if(strstr(recvBuff,"Message") != NULL){
+	  std::cout << recvBuff;
+	  std::cout << "\n";
+	  break;
+	}
       }
-      std::cout << "\n";
-      }
-      
+    }
     
   }
   

@@ -28,9 +28,8 @@ void subscription_handler(int client,char* recvBuff){
       else if(strstr(topic,"security") != NULL)
 	temp = &security;
       temp->push_back(client);
-  
-      iteration++;
-    }
+    }  
+    iteration++;
   }
 }
 
@@ -47,7 +46,8 @@ int disconnect_handler(int client){
 }
 
 void publish_handler(int client,char* recvBuff){
-  char *topic,*rest;
+  char *topic,*rest,commandBuff[1200];
+  memset(commandBuff,'\0',sizeof(commandBuff));
   rest = recvBuff;
   int iteration = 0;
   std::vector<int> *temp;
@@ -73,10 +73,11 @@ void publish_handler(int client,char* recvBuff){
     else if(iteration == 2){
       output_log << topic << "\n\n";
       output_log.flush();
-      
+      strcpy(commandBuff,"Message received: ");
+      strcat(commandBuff,topic);
       for(int i=0;i<(int)temp->size();i++){
 	int n;
-	if((n = write(temp->at(i),topic,sizeof(topic))) < 0)
+	if((n = write(temp->at(i),commandBuff,sizeof(commandBuff))) < 0)
 	  output_log << "Write Failure\n";
 	output_log<<"Writing to Client" << temp->at(i) << " with message " << topic << "\n\n";
 	output_log.flush();
@@ -112,7 +113,7 @@ int main(int argc, char *argv[]){
   char sendBuff[1025];
   memset(sendBuff, '0', sizeof(sendBuff)); 
   char recvBuff[100];
-  memset(recvBuff, '0',strlen(recvBuff));
+  memset(recvBuff, '0',sizeof(recvBuff));
   
   for(int i=0;i<max_clients;i++)
     client_socket[i] = 0;
@@ -188,10 +189,6 @@ int main(int argc, char *argv[]){
 	  }
 	  else if(strstr(recvBuff,"SUB")!=NULL){
 	    subscription_handler(client_socket[i],recvBuff);
-	  }
-	  else{
-	    output_log << "Received package, but was unable to identify\n" << recvBuff << "\n\n";
-	    output_log.flush();
 	  }
 	  memset(recvBuff, '\0',strlen(recvBuff));
 	}

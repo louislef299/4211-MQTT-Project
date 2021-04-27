@@ -19,8 +19,9 @@
 #include <vector>
 #include <string>
 #include <cstring>
-#include <poll.h>
+#include <sys/poll.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 
 class Socket{
 public:
