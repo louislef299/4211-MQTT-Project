@@ -70,7 +70,7 @@ void publish_mqtt(int sockfd,bool just_topic=false){
     memset(msg, '\0',strlen(msg));
     while(1){
       scanf("%s",buffer);
-      if(strcmp(buffer,"exit")==0)
+      if(buffer[strlen(buffer)] == '\n' || strcmp("exit",buffer) == 0)
 	break;
       size_check += strlen(buffer)+1;
       if(size_check > 1000){
@@ -86,15 +86,16 @@ void publish_mqtt(int sockfd,bool just_topic=false){
     strcat(commandBuff,",");
     //need to change message to a char*
     strcat(commandBuff,msg);
-    while(write(sockfd,commandBuff,strlen(commandBuff)) < 0)
+    while(write(sockfd,commandBuff,sizeof(commandBuff)) < 0)
       std::cout << "Write failure, trying again...\n";
     memset(msg, '\0',strlen(msg));
     printf("Your sent package: %s\n",commandBuff);
+
   }else{
     strcpy(commandBuff,"SUB,");
     strcat(commandBuff,topic);
     
-    while(write(sockfd,commandBuff,strlen(commandBuff)) < 0)
+    while(write(sockfd,commandBuff,sizeof(commandBuff)) < 0)
       std::cout << "Write failure, trying again...\n";
 
     printf("Your sent package: %s\n",commandBuff);
@@ -120,6 +121,10 @@ void disconnect_mqtt(int sockfd){
     if(strstr(commandBuff,"DISC_ACK")!=NULL)
       break;
   }
+
+  output_log << "Successful Disconnect on socket " << sockfd << "\n";
+  output_log.flush();
+  
   close(sockfd);
   if(n < 0){
     printf("\n Read error \n");
@@ -133,11 +138,20 @@ int main(int argc, char *argv[]){
   std::cout << "Welcome to the Project 1 Publishing service!\n";
   
   int cont = 1;
-  int sockfd;
+  int sockfd,activity;
   char commandBuff[200];
+  struct timeval tv;
+  tv.tv_sec = 0;
+  tv.tv_usec = 1000;
 
+  fd_set readfds;
+  
   sockfd = -1;
   while(cont){    
+    FD_ZERO(&readfds);
+    if(sockfd != -1)
+      FD_SET(sockfd,&readfds);
+    
     std::cout << "Please write a command: ";
     fgets(commandBuff, 100, stdin);
     string command(commandBuff);
@@ -154,7 +168,10 @@ int main(int argc, char *argv[]){
 	if(sockfd == -1)
 	  std::cout << "Unsuccessful Connection\n";
 	else{
+	  FD_SET(sockfd,&readfds);
 	  std::cout << "Successful Connection on sockect " << sockfd << "\n";
+	  output_log << "Successful Connection on sockect " << sockfd << "\n";
+	  output_log.flush();
 	}
       }
       break;
@@ -177,29 +194,27 @@ int main(int argc, char *argv[]){
       if(sockfd != -1)
 	disconnect_mqtt(sockfd);
       cont = 0;
+      output_log.close();
       break;
     default:
       std::cout << "Invalid command, please try again\n";
       break;	
     }
 
-    int n;
-    char recvBuff[200];
-    memset(recvBuff, '\0',strlen(recvBuff));  
-    if((n = read(sockfd, recvBuff, strlen(recvBuff))) > 0){	  
-      output_log << "Message received: " << recvBuff;
-      while((n = read(sockfd, recvBuff, strlen(recvBuff))) > 0){
-	output_log << recvBuff;
+    
+    activity = select(sockfd+1,&readfds,NULL,NULL,&tv);
+    
+    if(FD_ISSET(sockfd,&readfds)){	  
+      int n;
+      char recvBuff[200];
+      memset(recvBuff, '\0',strlen(recvBuff));
+      std::cout << "Message received: " << recvBuff;
+      while((n = read(sockfd, recvBuff, sizeof(recvBuff)-1)) > 0){
+	std::cout << recvBuff;
       }
-      output_log << "\n";
-      output_log.flush();
-    }
-    /*
-    if(canReadFromPipe() && cont != 0){
-      memset(commandBuff, '\0',strlen(commandBuff));
-      read(custom_pipe[0], commandBuff, sizeof(commandBuff)-1);
-      std::cout << "\n\nNew message: " << commandBuff << '\n';
-      }*/
+      std::cout << "\n";
+      }
+      
     
   }
   

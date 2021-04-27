@@ -19,21 +19,18 @@ void subscription_handler(int client,char* recvBuff){
       output_log << "Client"<< client << ": <SUB,TOPIC>\nTopic: " << topic << "\n\n";
       output_log.flush();
 
-      if(strstr(topic,"weather") != NULL){
+      if(strstr(topic,"weather") != NULL)
 	temp = &weather;
-      }
-      else if(strstr(topic,"news") != NULL){
+      else if(strstr(topic,"news") != NULL)
 	temp = &news;
-      }
-      else if(strstr(topic,"health") != NULL){
+      else if(strstr(topic,"health") != NULL)
 	temp = &health;
-      }
-      else if(strstr(topic,"security") != NULL){
+      else if(strstr(topic,"security") != NULL)
 	temp = &security;
-      }
       temp->push_back(client);
+  
+      iteration++;
     }
-    iteration++;
   }
 }
 
@@ -59,23 +56,27 @@ void publish_handler(int client,char* recvBuff){
       output_log << "Client" << client << ":<PUB,TOPIC,MSG>\nTopic: " << topic << "\n\tmessage: ";
       //output_log.flush();
 
-      if(strstr(topic,"weather") != NULL)
+      if(strstr(topic,"weather") != NULL){
 	temp = &weather;
-      else if(strstr(topic,"news") != NULL)
+      }
+      else if(strstr(topic,"news") != NULL){
 	temp = &news;
-      else if(strstr(topic,"health") != NULL)
+      }
+      else if(strstr(topic,"health") != NULL){
 	temp = &health;
-      else if(strstr(topic,"security") != NULL)
+      }
+      else if(strstr(topic,"security") != NULL){
 	temp = &security;
-
+      }
+      
     }
     else if(iteration == 2){
       output_log << topic << "\n\n";
       output_log.flush();
-
-      for(int i=0;i<(int)(temp->size());i++){
+      
+      for(int i=0;i<temp->size();i++){
 	int n;
-	if((n = write(temp->at(i),topic,strlen(topic))) < 0)
+	if((n = write(temp->at(i),topic,sizeof(topic))) < 0)
 	  output_log << "Write Failure\n";
 	output_log<<"Writing to Client" << temp->at(i) << " with message " << topic << "\n\n";
 	output_log.flush();
@@ -89,13 +90,13 @@ int main(int argc, char *argv[]){
   int master_socket,max_sd,sd,max_clients = 100,activity,new_socket,check,port=8080,i,client_socket[100],addrlen;
   
   fd_set readfds;
-  
+
   output_log.open("connections_log.txt");
 
   struct sockaddr_in serv_addr; 
 
   master_socket = socket(AF_INET, SOCK_STREAM, 0);
-  memset(&serv_addr, '0', sizeof(serv_addr));
+  bzero(&serv_addr, sizeof(serv_addr));
 
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -115,7 +116,10 @@ int main(int argc, char *argv[]){
   
   for(int i=0;i<max_clients;i++)
     client_socket[i] = 0;
-    
+
+  output_log << "Master socket: " << master_socket << "\n\n";
+  output_log.flush();
+  
   while(1){
     FD_ZERO(&readfds);
 
@@ -154,7 +158,7 @@ int main(int argc, char *argv[]){
 	fputs(recvBuff,stdout);
       }
       if(successful_connection){
-	for(int i=0;i<max_clients;i++){
+	for(i=0;i<max_clients;i++){
 	  if(client_socket[i] == 0){
 	    client_socket[i] = new_socket;
 	    break;
@@ -169,27 +173,33 @@ int main(int argc, char *argv[]){
 
     }
 
-    for(int i=0;i<max_clients;i++){
+    for(i=0;i<max_clients;i++){
       sd = client_socket[i];
 
       if(FD_ISSET(sd,&readfds)){
 	memset(recvBuff, '\0',strlen(recvBuff));
 	int n;
-	while((n=read(sd,recvBuff,sizeof(recvBuff)-1))>0){	  
+	while((n=read(sd,recvBuff,sizeof(recvBuff)))>0){	  
 	  if(strstr(recvBuff,"PUB")!=NULL){
 	    publish_handler(client_socket[i],recvBuff);
 	  }
-	  if(strstr(recvBuff,"DISC")!=NULL){
+	  else if(strstr(recvBuff,"DISC")!=NULL){
 	    disconnect_handler(client_socket[i]);
 	  }
-	  if(strstr(recvBuff,"SUB")!=NULL){
+	  else if(strstr(recvBuff,"SUB")!=NULL){
 	    subscription_handler(client_socket[i],recvBuff);
+	  }
+	  else{
+	    output_log << "Received package, but was unable to identify\n" << recvBuff << "\n\n";
+	    output_log.flush();
 	  }
 	  memset(recvBuff, '\0',strlen(recvBuff));
 	}
       }
     }
+  
   }
   output_log.close();
  
+  
 }
