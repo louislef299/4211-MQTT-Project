@@ -1,11 +1,9 @@
 #include "socket.h"
+#include "tnode.h"
 
 std::ofstream output_log;
 
-std::vector<int> weather;
-std::vector<int> news;
-std::vector<int> health;
-std::vector<int> security;
+TNode *homepage;
 
 Socket *socket_helper = new Socket();
 
@@ -13,21 +11,27 @@ void subscription_handler(int client,char* recvBuff){
   char *topic,*rest;
   rest = recvBuff;
   int iteration = 0;
-  std::vector<int> *temp;
   while((topic = strtok_r(rest,",",&rest))){
     if(iteration == 1){
       output_log << "Client"<< client << ": <SUB,TOPIC>\nTopic: " << topic << "\n\n";
       output_log.flush();
+      std::string tnode_topic(topic);
+      homepage->addSubscriber(tnode_topic,client);
+    }  
+    iteration++;
+  }
+}
 
-      if(strstr(topic,"weather") != NULL)
-	temp = &weather;
-      else if(strstr(topic,"news") != NULL)
-	temp = &news;
-      else if(strstr(topic,"health") != NULL)
-	temp = &health;
-      else if(strstr(topic,"security") != NULL)
-	temp = &security;
-      temp->push_back(client);
+void unsubscribe_handler(int client,char* recvBuff){
+  char *topic,*rest;
+  rest = recvBuff;
+  int iteration = 0;
+  while((topic = strtok_r(rest,",",&rest))){
+    if(iteration == 1){
+      output_log << "Client"<< client << ": <UNSUB,TOPIC>\nTopic: " << topic << "\n\n";
+      output_log.flush();
+      std::string tnode_topic(topic);
+      homepage->removeSubscriber(tnode_topic,client);
     }  
     iteration++;
   }
@@ -49,39 +53,33 @@ void publish_handler(int client,char* recvBuff){
   char *topic,*rest,commandBuff[1200];
   memset(commandBuff,'\0',sizeof(commandBuff));
   rest = recvBuff;
-  int iteration = 0;
-  std::vector<int> *temp;
+  int iteration = 0,retain;
+  std::string tnode_topic;
   while((topic = strtok_r(rest,",",&rest))){
     if(iteration == 1){
-      output_log << "Client" << client << ":<PUB,TOPIC,MSG>\nTopic: " << topic << "\n\tmessage: ";
-      //output_log.flush();
-
-      if(strstr(topic,"weather") != NULL){
-	temp = &weather;
-      }
-      else if(strstr(topic,"news") != NULL){
-	temp = &news;
-      }
-      else if(strstr(topic,"health") != NULL){
-	temp = &health;
-      }
-      else if(strstr(topic,"security") != NULL){
-	temp = &security;
-      }
-      
+      output_log << "Client" << client << ":<PUB,TOPIC,RETAIN,MSG>\nTopic: " << topic; 
+      std::string tnode_temp(topic);
+      tnode_topic = tnode_temp;
     }
     else if(iteration == 2){
+      output_log << " message will ";
+      if(strstr(topic,"RETAIN") != NULL){
+	output_log << "be retained";
+	retain = 1;
+      }else{
+	output_log << "not be retained";
+	retain = 0;
+      }
+      output_log << "\n\tmessage: ";
+      output_log.flush();
+    }
+    else if(iteration == 3){
       output_log << topic << "\n\n";
       output_log.flush();
       strcpy(commandBuff,"Message received: ");
       strcat(commandBuff,topic);
-      for(int i=0;i<(int)temp->size();i++){
-	int n;
-	if((n = write(temp->at(i),commandBuff,sizeof(commandBuff))) < 0)
-	  output_log << "Write Failure\n";
-	output_log<<"Writing to Client" << temp->at(i) << " with message " << topic << "\n\n";
-	output_log.flush();
-      }
+
+      homepage->addMessage(tnode_topic,topic,retain,output_log);
     }
     iteration++;  
   }
@@ -92,6 +90,8 @@ int main(int argc, char *argv[]){
   
   fd_set readfds;
 
+  homepage = new TNode("home");
+  
   output_log.open("connections_log.txt");
 
   struct sockaddr_in serv_addr; 
@@ -186,6 +186,9 @@ int main(int argc, char *argv[]){
 	  }
 	  else if(strstr(recvBuff,"DISC")!=NULL){
 	    disconnect_handler(client_socket[i]);
+	  }
+	  else if(strstr(recvBuff,"UNSUB")!=NULL){
+	    unsubscribe_handler(client_socket[i],recvBuff);
 	  }
 	  else if(strstr(recvBuff,"SUB")!=NULL){
 	    subscription_handler(client_socket[i],recvBuff);

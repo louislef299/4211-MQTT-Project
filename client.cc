@@ -4,7 +4,7 @@ using namespace std;
 
 std::ofstream output_log;
 
-enum command{CONNECTION,DISCONNECT,PUBLISH,SUBSCRIBE,QUIT,NONE};
+enum command{CONNECTION,DISCONNECT,PUBLISH,SUBSCRIBE,QUIT,NONE,UNSUBSCRIBE,LIST};
 
 Socket *socket_helper = new Socket();
 
@@ -20,6 +20,10 @@ command hashit(string& command){
     return PUBLISH;
   if("SUBSCRIBE\n" == command)
     return SUBSCRIBE;
+  if("UNSUBSCRIBE\n" == command)
+    return UNSUBSCRIBE;
+  if("LIST\n" == command)
+    return LIST;
   if("QUIT\n" == command)
     return QUIT;
   return NONE;
@@ -28,7 +32,7 @@ command hashit(string& command){
 void publish_mqtt(int sockfd,bool just_topic=false){
   char topic[10];
   int loop = 1;
-  int topicNum;
+  int topicNum,retain;
   while(loop){
     std::cout << "Please choose a topic(type a number):\n[1] Weather\n[2] News\n[3] Health\n[4] Security\n";
 
@@ -63,6 +67,15 @@ void publish_mqtt(int sockfd,bool just_topic=false){
   if(!just_topic){   
     char msg[1200],buffer[50],commandBuff[2000];
     memset(commandBuff, '\0',strlen(commandBuff));  
+
+    std::cout << "Would you like this message to be retained?(yes or no)";
+    fgets(buffer, 50, stdin);
+    if(strstr(buffer,"y") != NULL)
+      retain = 1;
+    else
+      retain = 0;
+    memset(buffer,'\0',strlen(buffer));
+    
     std::cout << "What message would you like to publish(max 1000 characters)?\nPublication(Type 'exit' to finish publication): ";
     int size_check = 0;
     memset(msg, '\0',strlen(msg));
@@ -185,6 +198,10 @@ int main(int argc, char *argv[]){
       break;
     case SUBSCRIBE:
       publish_mqtt(sockfd,true);
+      break;
+    case UNSUBSCRIBE:
+      break;
+    case LIST:
       break;
     case QUIT:
       if(sockfd != -1)
