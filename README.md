@@ -8,7 +8,7 @@ make server
 
 then type
 
-````bash
+```bash
 make client
 ```
 
