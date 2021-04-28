@@ -24,7 +24,7 @@ and on another type
 ./start_client
 ```
 
-This is how to start the code. Within the client program, by typing 'help', a list of command will appear and you will be able to publish, list topics, and subscribe to the main server. Enjoy!
+This is how to start the code. Within the client program, by typing `help`, a list of command will appear and you will be able to publish, list topics, and subscribe to the main server. Enjoy!
 
 ## BUGLIST
 
