@@ -1,3 +1,8 @@
+/**
+ * @author Louis Lefebvre
+ * LOOk AT README.md FOR MORE INFO
+ */
+
 #include "socket.h"
 
 /**

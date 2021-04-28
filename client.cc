@@ -1,3 +1,7 @@
+/**
+ * @author Louis Lefebvre
+ */
+
 #include "socket.h"
 
 using namespace std;
