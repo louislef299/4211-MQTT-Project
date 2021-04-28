@@ -9,16 +9,18 @@ public:
 
   std::string getName();
 
-  std::vector<TNode> getTopics();
+  std::vector<TNode*> getTopics();
 
   TNode *addTopic(std::string topic);
   
   void addMessage(std::string topic,char* msg,int retain,std::ofstream &output_log);
 
-  TNode *findTNode(std::string name,int *isParent);
+  TNode *findTNode(std::string name);
   
   int addSubscriber(std::string topic,int sub);
 
+  int isParent(std::string topic,TNode *tempNode);
+  
   void directAddSubscriber(int sub);
 
   int removeSubscriber(std::string topic,int sub);
@@ -27,7 +29,7 @@ public:
   
  private:
   std::string name;
-  std::vector<TNode> directTopics;
+  std::vector<TNode*> directTopics;
   TNode *parentTopic;
   std::vector<char*> messages;
   std::vector<int> subscribers;

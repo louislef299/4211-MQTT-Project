@@ -10,20 +10,19 @@ std::string TNode::getName(){
   return name;
 }
 
-std::vector<TNode> TNode::getTopics(){
+std::vector<TNode*> TNode::getTopics(){
   return directTopics;
 }
 
 TNode *TNode::addTopic(std::string topic){
-  TNode *temp = new TNode(topic,this);
-  directTopics.push_back(*temp);
-  return temp;
+  directTopics.push_back((new TNode(topic,this)));
+  return directTopics.at(directTopics.size()-1);
 }
 
-void TNode::addMessage(std::string topic,char* msg,int retain,std::ofstream &output_log){
-  int *isParent = 0; 
-  TNode *msgNode = this->findTNode(topic,isParent);
-  if((msgNode != nullptr) && (*isParent == 0)){
+void TNode::addMessage(std::string topic,char* msg,int retain,std::ofstream &output_log){ 
+  TNode *msgNode = this->findTNode(topic);
+  int isParent = this->isParent(topic,msgNode);
+  if((msgNode != nullptr) && (isParent == 0)){
     if(retain)
       messages.push_back(msg);
     for(int i=0;i<subscribers.size();i++){
@@ -38,18 +37,17 @@ void TNode::addMessage(std::string topic,char* msg,int retain,std::ofstream &out
     return;
   }
 
-  else if(*isParent){
+  else if(isParent){
     int delim = (int)topic.find_last_of("/");
     std::string name = topic.substr(delim+1,topic.size());
-    TNode *temp = new TNode(name,msgNode);
-    directTopics.push_back(*temp);
+    directTopics.push_back((new TNode(name,msgNode)));
     if(retain)
       messages.push_back(msg);
   }
   return;
 }
 
-TNode *TNode::findTNode(std::string name,int *isParent){
+TNode *TNode::findTNode(std::string name){
   if(this->getName() == name)
     return this;
   
@@ -59,34 +57,32 @@ TNode *TNode::findTNode(std::string name,int *isParent){
     topic = name.substr(0,delim);
   else{
     if(directTopics.empty()){
-      *isParent = 1;
       return parentTopic;
     }
     
     for(int i=0;i<directTopics.size();i++)
-      if(directTopics.at(i).getName() == name)
-	return &directTopics.at(i);
+      if(directTopics.at(i)->getName() == name)
+	return directTopics.at(i);
 
-    *isParent = 1;
     return parentTopic;
   }
   
   for(int i=0;i<directTopics.size();i++){
-    if(directTopics.at(i).getName() == topic)
-      return directTopics.at(i).findTNode(name.substr(delim+1,name.size()),isParent);
+    if(directTopics.at(i)->getName() == topic)
+      return directTopics.at(i)->findTNode(name.substr(delim+1,name.size()));
   }
 
   return nullptr;
 }
 
 int TNode::addSubscriber(std::string topic,int sub){
-  int *isParent = 0;
-  TNode *temp = this->findTNode(topic,isParent);
-  if(temp != nullptr && *isParent == 0){
+  TNode *temp = this->findTNode(topic);
+  int isParent = this->isParent(topic,temp);
+  if(temp != nullptr && isParent == 0){
     temp->directAddSubscriber(sub);
     return 0;
   }
-  else if(*isParent == 1){
+  else if(isParent == 1){
     TNode *newTopic = temp->addTopic(topic);
     newTopic->directAddSubscriber(sub);
     return 0;
@@ -98,10 +94,23 @@ void TNode::directAddSubscriber(int sub){
   subscribers.push_back(sub);
 }
 
+int TNode::isParent(std::string topic,TNode *tempNode){
+  int delim = (int)topic.find_last_of("/");
+  std::string name;
+  if(delim != -1)
+    name = topic.substr(delim+1,topic.size());
+  else
+    name = topic;
+
+  if(name == tempNode->getName())
+    return 1;
+  return 0;
+}
+
 int TNode::removeSubscriber(std::string topic,int sub){
-  int *isParent = 0;
-  TNode *temp = this->findTNode(topic,isParent);
-  if(temp != nullptr && *isParent == 0){
+  TNode *temp = this->findTNode(topic);
+  int isParent = this->isParent(topic,temp);
+  if(temp != nullptr && isParent == 0){
     temp->directRemoveSubscriber(sub);
     return 0;
   }

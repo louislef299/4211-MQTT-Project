@@ -37,8 +37,6 @@ int Socket::make_connection(int port){
     return -1;
   } 
 
-  std::cout << "Connection on socket " << sockfd << "\n";
-  
   int n;
   char commandBuff[100];
   
@@ -46,14 +44,13 @@ int Socket::make_connection(int port){
   write(sockfd,commandBuff,strlen(commandBuff));
   
   while((n = read(sockfd, recvBuff, sizeof(recvBuff)-1)) > 0){
-    if(strcmp(recvBuff,"CONN_ACK")==0)
+    if(strstr(recvBuff,"CONN_ACK")!=NULL)
       break;
   } 
   if(n < 0){
     printf("\n Read error \n");
   } 
 
-  std::cout << "sockfd from make_connection(): " << sockfd << "\n";
   return sockfd;
 }
 

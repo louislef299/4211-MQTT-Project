@@ -1,10 +1,15 @@
 #include "socket.h"
-#include "tnode.h"
 
 std::ofstream output_log;
 
-TNode *homepage;
+struct topic_entry{
+  std::string name;
+  std::vector<int> clients;
+  std::vector<std::string> msgs;
+};
 
+std::vector<topic_entry*> topics;
+  
 Socket *socket_helper = new Socket();
 
 void send_error(int client){
@@ -28,34 +33,62 @@ void send_success(int client){
 void subscription_handler(int client,char* recvBuff){
   char *topic,*rest;
   rest = recvBuff;
-  int iteration = 0,check;
+  int iteration = 0,i;
   while((topic = strtok_r(rest,",",&rest))){
     if(iteration == 1){
-      output_log << "Client"<< client << ": <SUB,TOPIC>\nTopic: " << topic << "\n\n";
-      output_log.flush();
       std::string tnode_topic(topic);
-      check = homepage->addSubscriber(tnode_topic,client);
+      output_log << "Client"<< client << ": <SUB,TOPIC>\nTopic: " << tnode_topic << "\n\n";
+      output_log.flush();
+      for(i=0;i<(int)topics.size();i++){
+	if(topics.at(i)->name == tnode_topic){
+	  topics.at(i)->clients.push_back(client);
+	  send_success(client);
+	  if(!topics.at(i)->msgs.empty()){
+	    char commandBuff[1200];
+	    memset(commandBuff,'\0',sizeof(commandBuff));
+	    strcat(commandBuff,"Messages:\n");
+	    for(int j=0;j<(int)topics.at(i)->msgs.size();j++)
+	      strcat(commandBuff,topics.at(i)->msgs.at(j).c_str());
+	    write(client,commandBuff,sizeof(commandBuff));
+	    output_log << "Wrote " << commandBuff << " to Client" << client << "\n\n" ;
+	    output_log.flush();
+	  }
+	  break;
+	}
+      }
+      if(i == (int)topics.size()){
+	struct topic_entry *temp_topic = (topic_entry*)malloc(sizeof(topic_entry));
+	temp_topic->name = tnode_topic;
+	temp_topic->clients.push_back(client);
+	topics.push_back(temp_topic);
+      }
     }  
     iteration++;
   }
-
-  if(check == 0)
-    send_success(client);
-  else
-    send_error(client);
+  send_error(client);
   
 }
 
 void unsubscribe_handler(int client,char* recvBuff){
   char *topic,*rest;
   rest = recvBuff;
-  int iteration = 0,check;
+  int iteration = 0,i,check;
   while((topic = strtok_r(rest,",",&rest))){
     if(iteration == 1){
       output_log << "Client"<< client << ": <UNSUB,TOPIC>\nTopic: " << topic << "\n\n";
       output_log.flush();
       std::string tnode_topic(topic);
-      check = homepage->removeSubscriber(tnode_topic,client);
+      for(i=0;i<(int)topics.size();i++){
+	if(topics.at(i)->name == tnode_topic){
+	  for(int j=0;j<(int)topics.at(i)->clients.size();j++){
+	    if(topics.at(i)->clients.at(j) == client){
+	      topics.at(i)->clients.at(j) = -1;
+	      check = 0;
+	      break;
+	    }
+	  }
+	}
+      }
     }  
     iteration++;
   }
@@ -82,7 +115,7 @@ void publish_handler(int client,char* recvBuff){
   char *topic,*rest,commandBuff[1200];
   memset(commandBuff,'\0',sizeof(commandBuff));
   rest = recvBuff;
-  int iteration = 0,retain;
+  int iteration = 0,retain,i;
   std::string tnode_topic;
   while((topic = strtok_r(rest,",",&rest))){
     if(iteration == 1){
@@ -91,7 +124,7 @@ void publish_handler(int client,char* recvBuff){
       tnode_topic = tnode_temp;
     }
     else if(iteration == 2){
-      output_log << " message will ";
+      output_log << "\nmessage will ";
       if(strstr(topic,"RETAIN") != NULL){
 	output_log << "be retained";
 	retain = 1;
@@ -108,18 +141,51 @@ void publish_handler(int client,char* recvBuff){
       strcpy(commandBuff,"Message received: ");
       strcat(commandBuff,topic);
 
-      homepage->addMessage(tnode_topic,topic,retain,output_log);
+      for(i=0;i<(int)topics.size();i++){
+	if(topics.at(i)->name == tnode_topic){
+	  if(retain)
+	    topics.at(i)->msgs.push_back(topic);
+	  for(int j=0;j<(int)topics.at(i)->clients.size();j++)
+	    if(topics.at(i)->clients.at(j) != -1){
+	      write(topics.at(i)->clients.at(j),commandBuff,strlen(commandBuff));
+	      output_log << "Wrote " << commandBuff << " to Client" << topics.at(i)->clients.at(j) << "\n\n" ;
+	      output_log.flush();
+	    }
+	  
+	  break;
+	}
+      }
+      if(i == (int)topics.size()){
+	struct topic_entry *temp_topic = (topic_entry*)malloc(sizeof(topic_entry));
+	temp_topic->name = tnode_topic;
+	if(retain)
+	    temp_topic->msgs.push_back(topic);
+	topics.push_back(temp_topic);
+      }
     }
     iteration++;  
   }
 }
 
+void list_handler(int client){
+  char commandBuff[1200];
+  memset(commandBuff,'\0',sizeof(commandBuff));
+
+  sprintf(commandBuff,"%ld",topics.size());
+  strcat(commandBuff,",Message");
+  for(int i=0;i<(int)topics.size();i++){
+    strcat(commandBuff,",");
+    strcat(commandBuff,topics.at(i)->name.c_str());
+  }
+  write(client,commandBuff,strlen(commandBuff));
+  output_log << "Wrote " << commandBuff << " to Client" << client << "\n\n";
+  output_log.flush();
+}
+
 int main(int argc, char *argv[]){
-  int master_socket,max_sd,sd,max_clients = 100,activity,new_socket,check,port=8080,i,client_socket[100],addrlen;
+  int master_socket,max_sd,sd,max_clients = 100,new_socket,check,port=8080,i,client_socket[100],addrlen;
   
   fd_set readfds;
-
-  homepage = new TNode("home");
   
   output_log.open("connections_log.txt");
 
@@ -166,7 +232,7 @@ int main(int argc, char *argv[]){
 	max_sd = sd;
     }
 
-    activity = select(max_sd+1,&readfds,NULL,NULL,NULL);
+    select(max_sd+1,&readfds,NULL,NULL,NULL);
     addrlen = sizeof(serv_addr);
     
     if(FD_ISSET(master_socket,&readfds)){
@@ -221,6 +287,9 @@ int main(int argc, char *argv[]){
 	  }
 	  else if(strstr(recvBuff,"SUB")!=NULL){
 	    subscription_handler(client_socket[i],recvBuff);
+	  }
+	  else if(strstr(recvBuff,"LIST")!=NULL){
+	    list_handler(client_socket[i]);
 	  }
 	  memset(recvBuff, '\0',strlen(recvBuff));
 	}

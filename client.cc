@@ -36,6 +36,10 @@ void publish_mqtt(int sockfd,bool just_topic=false,bool unsub=false){
   std::cout << "Please type your desired topic: ";
   memset(topic,'\0',strlen(topic));
   fgets(topic, 50, stdin);
+  for(int i=0;i<(int)strlen(topic);i++)
+    if(topic[i] == '\n')
+      topic[i] = '\0';
+  
   std::cout << "\n";
   if(!just_topic){   
     memset(commandBuff, '\0',strlen(commandBuff));  
@@ -51,11 +55,19 @@ void publish_mqtt(int sockfd,bool just_topic=false,bool unsub=false){
 
     memset(msg, '\0',strlen(msg));
     fgets(msg,1200,stdin);
+    for(int i=0;i<(int)strlen(msg);i++)
+      if(msg[i] == '\n')
+        msg[i] = '\0';
+  
     std::cout << "\n";
 
     strcpy(commandBuff,"PUB,");
     strcat(commandBuff,topic);
     strcat(commandBuff,",");
+    if(retain)
+      strcat(commandBuff,"RETAIN,");
+    else
+      strcat(commandBuff,"NORET,");
     //need to change message to a char*
     strcat(commandBuff,msg);
     while(write(sockfd,commandBuff,sizeof(commandBuff)) < 0)
@@ -72,22 +84,6 @@ void publish_mqtt(int sockfd,bool just_topic=false,bool unsub=false){
       std::cout << "Write failure, trying again...\n";
 
     printf("Your sent package: %s\n",commandBuff);
-
-    sleep(1);
-    
-    int n;
-    while((n = read(sockfd, commandBuff, sizeof(commandBuff)-1)) > 0){
-      if(strstr(commandBuff,"SUCCESS")!=NULL){
-	output_log << "Successful subscription\n\n";
-	break;
-      }
-      if(strstr(commandBuff,"ERROR")!=NULL){
-	output_log << "Error with subscription\n\n";
-	break;
-      }
-    }
-    output_log.flush();
-  
     return;
   }else{
     memset(commandBuff, '\0',strlen(commandBuff));  
@@ -97,23 +93,7 @@ void publish_mqtt(int sockfd,bool just_topic=false,bool unsub=false){
     while(write(sockfd,commandBuff,sizeof(commandBuff)) < 0)
       std::cout << "Write failure, trying again...\n";
 
-    printf("Your sent package: %s\n",commandBuff);
-
-    sleep(1);
-    
-    int n;
-    while((n = read(sockfd, commandBuff, sizeof(commandBuff)-1)) > 0){
-      if(strstr(commandBuff,"SUCCESS")!=NULL){
-	output_log << "Successful unsubscription\n\n";
-	break;
-      }
-      if(strstr(commandBuff,"ERROR")!=NULL){
-	output_log << "Error with unsubscription\n\n";
-	break;
-      }
-    }
-    output_log.flush();
-  
+    printf("Your sent package: %s\n",commandBuff);  
     return;
   }
 }
@@ -168,18 +148,19 @@ int main(int argc, char *argv[]){
 	sockfd = socket_helper->make_connection(8080);
 	memset(commandBuff, '\0',strlen(commandBuff));
 	sprintf(commandBuff,"client_connections_log%d.txt",sockfd);
-	output_log.open(commandBuff);
+	while(!output_log.is_open())
+	  output_log.open(commandBuff);
 	if(sockfd == -1)
 	  std::cout << "Unsuccessful Connection\n";
 	else{
 	  std::cout << "Successful Connection on sockect " << sockfd << "\n";
-	  output_log << "Successful Connection on sockect " << sockfd << "\n";
-	  output_log.flush();
 	  memset(&fds,'0',sizeof(fds));
 	  fds.fd = sockfd;
 	  fds.events = POLLIN;
 	  timeout = 100;
 	  rc = ioctl(sockfd, FIONBIO, (char *)&on);
+	  output_log << "Successful Connection on sockect " << sockfd << "\n";
+	  output_log.flush();
 	}
       }
       break;
@@ -199,8 +180,16 @@ int main(int argc, char *argv[]){
       publish_mqtt(sockfd,true);
       break;
     case UNSUBSCRIBE:
+      publish_mqtt(sockfd,true,true);
       break;
     case LIST:
+      char commandBuff[12];
+      memset(commandBuff, '\0',strlen(commandBuff));  
+      strcpy(commandBuff,"LIST");
+      while(write(sockfd,commandBuff,sizeof(commandBuff)) < 0)
+	std::cout << "Write failure, trying again...\n";
+
+      printf("Your sent package: %s\n",commandBuff);
       break;
     case QUIT:
       if(sockfd != -1)
@@ -213,7 +202,7 @@ int main(int argc, char *argv[]){
       std::cout << "Invalid command, please try again\n";
       break;	
     }
-
+    
     int n;
     char recvBuff[200];
     memset(recvBuff, '\0',strlen(recvBuff));
@@ -222,6 +211,19 @@ int main(int argc, char *argv[]){
 	if(strstr(recvBuff,"Message") != NULL){
 	  std::cout << recvBuff;
 	  std::cout << "\n";
+	  output_log << "received message :" << recvBuff << "\n\n";
+	  output_log.flush();
+	  break;
+	  
+	}
+	if(strstr(commandBuff,"SUCCESS")!=NULL){
+	  output_log << "Successful subscription\n\n";
+	  output_log.flush();
+	  break;
+	}
+	if(strstr(commandBuff,"ERROR")!=NULL){
+	  output_log << "Error with subscription\n\n";
+	  output_log.flush();
 	  break;
 	}
       }
