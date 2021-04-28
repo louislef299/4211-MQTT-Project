@@ -8,6 +8,8 @@ enum command{CONNECTION,DISCONNECT,PUBLISH,SUBSCRIBE,QUIT,NONE,UNSUBSCRIBE,LIST}
 
 Socket *socket_helper = new Socket();
 
+int sockfd;
+
 command hashit(string& command){
   for(int i=0;i<(int)command.length()-1;i++)
     command.at(i) = toupper(command.at(i));
@@ -123,14 +125,21 @@ void disconnect_mqtt(int sockfd){
   }
 }
 
+void sighandler(int signum){
+  disconnect_mqtt(sockfd);
+  exit(signum);
+}
+
 /****************************************************** 
     MQTT Project
  ******************************************************/
 int main(int argc, char *argv[]){
   std::cout << "Welcome to the Project 1 Publishing service!\n";
+
+  signal(SIGINT,sighandler);
   
   int cont = 1;
-  int sockfd,timeout,nfds = 1,on = 1,rc;
+  int timeout,nfds = 1,on = 1,rc;
   char commandBuff[200];
   struct pollfd fds;
   
@@ -202,29 +211,32 @@ int main(int argc, char *argv[]){
       std::cout << "Invalid command, please try again\n";
       break;	
     }
-    
-    int n;
-    char recvBuff[200];
-    memset(recvBuff, '\0',strlen(recvBuff));
-    if(((rc = poll(&fds,nfds,timeout)) > 0) && sockfd != -1){
-      while((n = read(sockfd, recvBuff, sizeof(recvBuff)-1)) > 0){
-	if(strstr(recvBuff,"Message") != NULL){
-	  std::cout << recvBuff;
-	  std::cout << "\n";
-	  output_log << "received message :" << recvBuff << "\n\n";
-	  output_log.flush();
-	  break;
+
+    if(sockfd != -1){
+      int n;
+      char recvBuff[200];
+      memset(recvBuff, '\0',strlen(recvBuff));
+      if(((rc = poll(&fds,nfds,timeout)) > 0) && sockfd != -1){
+	while((n = read(sockfd, recvBuff, sizeof(recvBuff)-1)) > 0){
+	  if(strstr(recvBuff,"Message") != NULL){
+	    std::cout << recvBuff;
+	    std::cout << "\n";
+	    output_log << recvBuff << "\n\n";
+	    output_log.flush();
+	    if(!((rc = poll(&fds,nfds,timeout)) > 0))
+	      break;
 	  
-	}
-	if(strstr(commandBuff,"SUCCESS")!=NULL){
-	  output_log << "Successful subscription\n\n";
-	  output_log.flush();
-	  break;
-	}
-	if(strstr(commandBuff,"ERROR")!=NULL){
-	  output_log << "Error with subscription\n\n";
-	  output_log.flush();
-	  break;
+	  }
+	  if(strstr(commandBuff,"SUCCESS")!=NULL){
+	    output_log << "Successful subscription\n\n";
+	    output_log.flush();
+	    break;
+	  }
+	  if(strstr(commandBuff,"ERROR")!=NULL){
+	    output_log << "Error with subscription\n\n";
+	    output_log.flush();
+	    break;
+	  }
 	}
       }
     }

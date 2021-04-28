@@ -22,6 +22,7 @@
 #include <sys/poll.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <signal.h>
 
 class Socket{
 public:

@@ -30,6 +30,72 @@ void send_success(int client){
   output_log.flush();
 }
 
+void multi_level_wildcard_handler(int client,std::string topic){
+  size_t placement = topic.rfind("#");
+  topic.erase(topic.begin()+placement);
+  int i;
+  int found = 0;
+  char commandBuff[1200];
+  memset(commandBuff,'\0',sizeof(commandBuff));
+  strcat(commandBuff,"Messages:\n");
+	
+  for(i=0;i<(int)topics.size();i++){
+    if(topics.at(i)->name.find(topic) != -1){
+      topics.at(i)->clients.push_back(client);
+      if(!topics.at(i)->msgs.empty()){
+	for(int j=0;j<(int)topics.at(i)->msgs.size();j++){
+	  strcat(commandBuff,topics.at(i)->msgs.at(j).c_str());
+	  strcat(commandBuff,"\n");
+	}
+	found = 1;
+	output_log << "Wrote " << commandBuff << " to Client" << client << "\n\n" ;
+	output_log.flush();
+      }
+    }
+  }
+  if(found)
+    write(client,commandBuff,sizeof(commandBuff));	
+  send_success(client);
+}
+
+void single_level_wildcard_handler(int client,std::string topic){
+  size_t placement = topic.find("+");
+  int i;
+  std::string tempLeft,tempRight,legitLeft,legitRight;
+  legitLeft = topic.substr(0,placement);
+  legitRight = topic.substr(placement+1);
+  int found = 0;
+  char commandBuff[1200];
+  memset(commandBuff,'\0',sizeof(commandBuff));
+  strcat(commandBuff,"Messages:\n");
+	
+  for(i=0;i<(int)topics.size();i++){
+    if(topics.at(i)->name.find(legitLeft) != -1 && topics.at(i)->name.find(legitLeft) != -1 ){
+      std::string takeover = topics.at(i)->name;
+      placement = takeover.find("/");
+      tempLeft = takeover.substr(0,placement+1);
+      takeover.erase(0,placement+1);
+      placement = takeover.find("/");
+      tempRight = takeover.substr(placement);
+      if(tempLeft == legitLeft && tempRight == legitRight){
+	topics.at(i)->clients.push_back(client);
+	if(!topics.at(i)->msgs.empty()){
+	  for(int j=0;j<(int)topics.at(i)->msgs.size();j++){
+	    strcat(commandBuff,topics.at(i)->msgs.at(j).c_str());
+	    strcat(commandBuff,"\n");
+	  }
+	  found = 1;
+	  output_log << "Wrote " << commandBuff << " to Client" << client << "\n\n" ;
+	  output_log.flush();
+	}
+      }
+    }
+  }
+  if(found)
+    write(client,commandBuff,sizeof(commandBuff));
+  send_success(client);
+}
+
 void subscription_handler(int client,char* recvBuff){
   char *topic,*rest;
   rest = recvBuff;
@@ -39,21 +105,31 @@ void subscription_handler(int client,char* recvBuff){
       std::string tnode_topic(topic);
       output_log << "Client"<< client << ": <SUB,TOPIC>\nTopic: " << tnode_topic << "\n\n";
       output_log.flush();
-      for(i=0;i<(int)topics.size();i++){
-	if(topics.at(i)->name == tnode_topic){
-	  topics.at(i)->clients.push_back(client);
-	  send_success(client);
-	  if(!topics.at(i)->msgs.empty()){
-	    char commandBuff[1200];
-	    memset(commandBuff,'\0',sizeof(commandBuff));
-	    strcat(commandBuff,"Messages:\n");
-	    for(int j=0;j<(int)topics.at(i)->msgs.size();j++)
-	      strcat(commandBuff,topics.at(i)->msgs.at(j).c_str());
-	    write(client,commandBuff,sizeof(commandBuff));
-	    output_log << "Wrote " << commandBuff << " to Client" << client << "\n\n" ;
-	    output_log.flush();
+      if(tnode_topic.find("#") != -1){
+	multi_level_wildcard_handler(client,tnode_topic);
+	return;
+      }
+      else if(tnode_topic.find("+") != -1){
+	single_level_wildcard_handler(client,tnode_topic);
+	return;
+      }
+      else{
+	for(i=0;i<(int)topics.size();i++){
+	  if(topics.at(i)->name == tnode_topic){
+	    topics.at(i)->clients.push_back(client);
+	    send_success(client);
+	    if(!topics.at(i)->msgs.empty()){
+	      char commandBuff[1200];
+	      memset(commandBuff,'\0',sizeof(commandBuff));
+	      strcat(commandBuff,"Messages:\n");
+	      for(int j=0;j<(int)topics.at(i)->msgs.size();j++)
+		strcat(commandBuff,topics.at(i)->msgs.at(j).c_str());
+	      write(client,commandBuff,sizeof(commandBuff));
+	      output_log << "Wrote " << commandBuff << " to Client" << client << "\n\n" ;
+	      output_log.flush();
+	    }
+	    break;
 	  }
-	  break;
 	}
       }
       if(i == (int)topics.size()){
