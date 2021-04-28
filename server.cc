@@ -1,17 +1,31 @@
 #include "socket.h"
 
+/**
+ * All interactions are recorded and saved into
+ * the connections_log.txt
+ */
 std::ofstream output_log;
 
+/**
+ * topic entries require a name to function
+ * correctly. They can also save the client port 
+ * numbers as well as retained messages
+ */
 struct topic_entry{
   std::string name;
   std::vector<int> clients;
   std::vector<std::string> msgs;
 };
 
+// saves all topics
 std::vector<topic_entry*> topics;
-  
+
+// similar to helper in client.cc
 Socket *socket_helper = new Socket();
 
+/**
+ * Sends ERROR to client
+ */ 
 void send_error(int client){
   char recvBuff[20];
   memset(recvBuff, '0',strlen(recvBuff));
@@ -21,6 +35,9 @@ void send_error(int client){
   output_log.flush();
 }
 
+/**
+ * Sends SUCCESS to client
+ */
 void send_success(int client){
   char recvBuff[20];
   memset(recvBuff, '0',strlen(recvBuff));
@@ -30,6 +47,9 @@ void send_success(int client){
   output_log.flush();
 }
 
+/**
+ * Handles the '#' in the subscription service
+ */
 void multi_level_wildcard_handler(int client,std::string topic){
   size_t placement = topic.rfind("#");
   topic.erase(topic.begin()+placement);
@@ -58,6 +78,9 @@ void multi_level_wildcard_handler(int client,std::string topic){
   send_success(client);
 }
 
+/**
+ * Handles the '+' wildcard in the subscription service
+ */
 void single_level_wildcard_handler(int client,std::string topic){
   size_t placement = topic.find("+");
   int i;
@@ -96,10 +119,16 @@ void single_level_wildcard_handler(int client,std::string topic){
   send_success(client);
 }
 
+/**
+ * The subscription handler is in charge of subscribing to
+ * a topic of the client's choosing. If the topic does not
+ * already exist, a topic of that name is created and the
+ * client is subscribed to it. Can handle the wildcards
+ */
 void subscription_handler(int client,char* recvBuff){
   char *topic,*rest;
   rest = recvBuff;
-  int iteration = 0,i;
+  int iteration = 0,i,sendSucc=0;
   while((topic = strtok_r(rest,",",&rest))){
     if(iteration == 1){
       std::string tnode_topic(topic);
@@ -117,7 +146,7 @@ void subscription_handler(int client,char* recvBuff){
 	for(i=0;i<(int)topics.size();i++){
 	  if(topics.at(i)->name == tnode_topic){
 	    topics.at(i)->clients.push_back(client);
-	    send_success(client);
+	    sendSucc = 1;
 	    if(!topics.at(i)->msgs.empty()){
 	      char commandBuff[1200];
 	      memset(commandBuff,'\0',sizeof(commandBuff));
@@ -141,10 +170,18 @@ void subscription_handler(int client,char* recvBuff){
     }  
     iteration++;
   }
+  if(sendSucc){
+    send_success(client);
+    return;
+  } 
   send_error(client);
   
 }
 
+/**
+ * The unsubscribed handler will unsubscribe a client from
+ * a certain topic and respond with either SUCCESS or ERROR
+ */
 void unsubscribe_handler(int client,char* recvBuff){
   char *topic,*rest;
   rest = recvBuff;
@@ -176,6 +213,10 @@ void unsubscribe_handler(int client,char* recvBuff){
   
 }
 
+/**
+ * The disconnect handler is very straight forward and simply
+ * responds to a DISK with DISK_ACK
+ */
 int disconnect_handler(int client){
   char recvBuff[20];
   memset(recvBuff, '0',strlen(recvBuff));
@@ -187,6 +228,13 @@ int disconnect_handler(int client){
   return 0;
 }
 
+/**
+ * Handles the publish command by either adding a new message
+ * to an already existing topic or creating a new topic with
+ * a new message. The retain flag is functional and will save
+ * a retained message to a topic. Either way, the message is 
+ * sent to all clients that are subscribed to the server
+ */
 void publish_handler(int client,char* recvBuff){
   char *topic,*rest,commandBuff[1200];
   memset(commandBuff,'\0',sizeof(commandBuff));
@@ -243,6 +291,10 @@ void publish_handler(int client,char* recvBuff){
   }
 }
 
+/**
+ * Handles the list command by sending all topics
+ * to the client
+ */
 void list_handler(int client){
   char commandBuff[1200];
   memset(commandBuff,'\0',sizeof(commandBuff));
@@ -258,6 +310,12 @@ void list_handler(int client){
   output_log.flush();
 }
 
+/**
+ * The main function in server.cc initializes quite a lot in the beginning.
+ * Glossing over details, I implemented the select() function in order to
+ * save all clients accessing the server. Currently, this program only works
+ * on local networks (127.0.0.1)
+ */
 int main(int argc, char *argv[]){
   int master_socket,max_sd,sd,max_clients = 100,new_socket,check,port=8080,i,client_socket[100],addrlen;
   
@@ -371,9 +429,6 @@ int main(int argc, char *argv[]){
 	}
       }
     }
-  
   }
   output_log.close();
- 
-  
 }

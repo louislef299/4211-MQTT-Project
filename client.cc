@@ -4,12 +4,23 @@ using namespace std;
 
 std::ofstream output_log;
 
-enum command{CONNECTION,DISCONNECT,PUBLISH,SUBSCRIBE,QUIT,NONE,UNSUBSCRIBE,LIST};
+enum command{CONNECTION,DISCONNECT,PUBLISH,SUBSCRIBE,QUIT,NONE,UNSUBSCRIBE,LIST,HELP,ECHO};
 
+/**
+ * The helper is used to declutter the client.cc file
+ * Functions that can be found in the socket class:
+ *  enable_keepalive()
+ *  make_connection()
+ *  canReadFromPipe()
+ * The last function is never used in this program
+ */
 Socket *socket_helper = new Socket();
 
-int sockfd;
+int sockfd,echo;
 
+/**
+ * Used to simplify switch statement in main
+ */
 command hashit(string& command){
   for(int i=0;i<(int)command.length()-1;i++)
     command.at(i) = toupper(command.at(i));
@@ -28,9 +39,20 @@ command hashit(string& command){
     return LIST;
   if("QUIT\n" == command)
     return QUIT;
+  if("HELP\n" == command)
+    return HELP;
+  if("ECHO\n" == command)
+    return ECHO;
   return NONE;
 }
 
+/**
+ * publish_mqtt is used for the publish command, subscribe command,
+ * and unsubscribe command. If publish is being attempted, sockfd
+ * is the only required variable. If subscribe, just_topic must
+ * be set to true, and if unsubscribe, just_topic AND unsub must
+ * be set to true
+ */
 void publish_mqtt(int sockfd,bool just_topic=false,bool unsub=false){
   char topic[50],msg[1200],buffer[50],commandBuff[2000];
   int retain;
@@ -75,7 +97,9 @@ void publish_mqtt(int sockfd,bool just_topic=false,bool unsub=false){
     while(write(sockfd,commandBuff,sizeof(commandBuff)) < 0)
       std::cout << "Write failure, trying again...\n";
     memset(msg, '\0',strlen(msg));
-    printf("Your sent package: %s\n",commandBuff);
+
+    if(echo)
+      printf("Your sent package: %s\n",commandBuff);
 
   }else if(!unsub){
     memset(commandBuff, '\0',strlen(commandBuff));  
@@ -85,7 +109,8 @@ void publish_mqtt(int sockfd,bool just_topic=false,bool unsub=false){
     while(write(sockfd,commandBuff,sizeof(commandBuff)) < 0)
       std::cout << "Write failure, trying again...\n";
 
-    printf("Your sent package: %s\n",commandBuff);
+    if(echo)
+      printf("Your sent package: %s\n",commandBuff);
     return;
   }else{
     memset(commandBuff, '\0',strlen(commandBuff));  
@@ -95,11 +120,16 @@ void publish_mqtt(int sockfd,bool just_topic=false,bool unsub=false){
     while(write(sockfd,commandBuff,sizeof(commandBuff)) < 0)
       std::cout << "Write failure, trying again...\n";
 
-    printf("Your sent package: %s\n",commandBuff);  
+    if(echo)
+      printf("Your sent package: %s\n",commandBuff);  
     return;
   }
 }
 
+/**
+ * disconnect_mqtt is for safe disconnection from the server and closing
+ * of the used port
+ */
 void disconnect_mqtt(int sockfd){
   char commandBuff[200];
   memset(commandBuff, '0',strlen(commandBuff));
@@ -108,6 +138,9 @@ void disconnect_mqtt(int sockfd){
   while(write(sockfd,commandBuff,strlen(commandBuff)) < 0)
     std::cout << "Write failure, trying again...\n";
 
+  if(echo)
+    printf("Your sent package: %s\n",commandBuff);
+  
   memset(commandBuff, '0',strlen(commandBuff));
   
   int n;
@@ -120,13 +153,17 @@ void disconnect_mqtt(int sockfd){
   output_log.flush();
   
   close(sockfd);
-  if(n < 0){
-    printf("\n Read error \n");
-  }
+  
 }
 
+/**
+ * Used for safe exit when SIGINT is sent
+ */
 void sighandler(int signum){
-  disconnect_mqtt(sockfd);
+  if(sockfd != -1){
+    std::cout << "\nSafely disconnecting...\n";
+    disconnect_mqtt(sockfd);
+  }
   exit(signum);
 }
 
@@ -134,7 +171,7 @@ void sighandler(int signum){
     MQTT Project
  ******************************************************/
 int main(int argc, char *argv[]){
-  std::cout << "Welcome to the Project 1 Publishing service!\n";
+  std::cout << "Welcome to the Project 1 Publishing service! Type 'help' for commands\n";
 
   signal(SIGINT,sighandler);
   
@@ -144,6 +181,7 @@ int main(int argc, char *argv[]){
   struct pollfd fds;
   
   sockfd = -1;
+  echo = 0;
   while(cont){    
     std::cout << "Please write a command: ";
     fgets(commandBuff, 100, stdin);
@@ -183,15 +221,31 @@ int main(int argc, char *argv[]){
       sockfd = -1;
       break;
     case PUBLISH:
+      if(sockfd == -1){
+	std::cout << "Please connect to the server first\n";
+	break;
+      }
       publish_mqtt(sockfd);
       break;
     case SUBSCRIBE:
+      if(sockfd == -1){
+	std::cout << "Please connect to the server first\n";
+	break;
+      }
       publish_mqtt(sockfd,true);
       break;
     case UNSUBSCRIBE:
+      if(sockfd == -1){
+	std::cout << "Please connect to the server first\n";
+	break;
+      }
       publish_mqtt(sockfd,true,true);
       break;
     case LIST:
+      if(sockfd == -1){
+	std::cout << "Please connect to the server first\n";
+	break;
+      }
       char commandBuff[12];
       memset(commandBuff, '\0',strlen(commandBuff));  
       strcpy(commandBuff,"LIST");
@@ -200,18 +254,35 @@ int main(int argc, char *argv[]){
 
       printf("Your sent package: %s\n",commandBuff);
       break;
+    case ECHO:
+      if(echo)
+	echo = 0;
+      else{
+	echo = 1;
+	std::cout << "echo\n";
+      }
+      break;
     case QUIT:
       if(sockfd != -1)
 	disconnect_mqtt(sockfd);
       cont = 0;
       output_log.close();
       sockfd = -1;
+      std::cout << "Have a great day! :)\n";
+      break;
+    case HELP:
+      std::cout << "Commands:\n <Connect> to connect to the server\n <Disconnect> to disconnect with the server\n <Subscribe> to subscribe to content on the server\n <Unsubscribe> to unsubscribe from content on the server\n <Publish> to publish content on the server\n <List> to list all the topics on the server\n <Echo> to echo the packages sent to the server\n <Quit> to end the session\n";
       break;
     default:
       std::cout << "Invalid command, please try again\n";
       break;	
     }
 
+    /* At the end of every command call, we check the port to see if there
+     * are any new messages. If they are a message, 'Message' will be in
+     * the package sent from the server, and the whole message will be
+     * displayed to the screen
+     */
     if(sockfd != -1){
       int n;
       char recvBuff[200];
@@ -228,12 +299,12 @@ int main(int argc, char *argv[]){
 	  
 	  }
 	  if(strstr(commandBuff,"SUCCESS")!=NULL){
-	    output_log << "Successful subscription\n\n";
+	    output_log << "Successful (un)subscription\n\n";
 	    output_log.flush();
 	    break;
 	  }
 	  if(strstr(commandBuff,"ERROR")!=NULL){
-	    output_log << "Error with subscription\n\n";
+	    output_log << "Error with (un)subscription\n\n";
 	    output_log.flush();
 	    break;
 	  }
