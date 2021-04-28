@@ -14,13 +14,13 @@ make client
 
 then, on one terminal, type
 
-````bash
+```bash
 ./start_server
 ```
 
 and on another type
 
-````bash
+```bash
 ./start_client
 ```
 
