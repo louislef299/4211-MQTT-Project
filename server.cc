@@ -60,7 +60,7 @@ void multi_level_wildcard_handler(int client,std::string topic){
   strcat(commandBuff,"Messages:\n");
 	
   for(i=0;i<(int)topics.size();i++){
-    if(topics.at(i)->name.find(topic) != -1){
+    if((int)topics.at(i)->name.find(topic) != -1){
       topics.at(i)->clients.push_back(client);
       if(!topics.at(i)->msgs.empty()){
 	for(int j=0;j<(int)topics.at(i)->msgs.size();j++){
@@ -93,7 +93,7 @@ void single_level_wildcard_handler(int client,std::string topic){
   strcat(commandBuff,"Messages:\n");
 	
   for(i=0;i<(int)topics.size();i++){
-    if(topics.at(i)->name.find(legitLeft) != -1 && topics.at(i)->name.find(legitLeft) != -1 ){
+    if((int)topics.at(i)->name.find(legitLeft) != -1 && (int)topics.at(i)->name.find(legitLeft) != -1 ){
       std::string takeover = topics.at(i)->name;
       placement = takeover.find("/");
       tempLeft = takeover.substr(0,placement+1);
@@ -134,11 +134,11 @@ void subscription_handler(int client,char* recvBuff){
       std::string tnode_topic(topic);
       output_log << "Client"<< client << ": <SUB,TOPIC>\nTopic: " << tnode_topic << "\n\n";
       output_log.flush();
-      if(tnode_topic.find("#") != -1){
+      if((int)tnode_topic.find("#") != -1){
 	multi_level_wildcard_handler(client,tnode_topic);
 	return;
       }
-      else if(tnode_topic.find("+") != -1){
+      else if((int)tnode_topic.find("+") != -1){
 	single_level_wildcard_handler(client,tnode_topic);
 	return;
       }
