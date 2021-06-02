@@ -1,6 +1,6 @@
 /**
  * @author Louis Lefebvre
- * LOOk AT README.md FOR MORE INFO
+ * LOOK AT README.md FOR MORE INFO
  */
 
 #include "socket.h"
@@ -96,9 +96,12 @@ void single_level_wildcard_handler(int client,std::string topic){
   char commandBuff[1200];
   memset(commandBuff,'\0',sizeof(commandBuff));
   strcat(commandBuff,"Messages:\n");
-	
+
+  output_log << legitLeft << " /+/ " << legitRight << "\n";
+  output_log.flush();
+  
   for(i=0;i<(int)topics.size();i++){
-    if((int)topics.at(i)->name.find(legitLeft) != -1 && (int)topics.at(i)->name.find(legitLeft) != -1 ){
+    if((int)topics.at(i)->name.find(legitLeft) != -1 && (int)topics.at(i)->name.find(legitRight) != -1 ){
       std::string takeover = topics.at(i)->name;
       placement = takeover.find("/");
       tempLeft = takeover.substr(0,placement+1);
@@ -269,7 +272,7 @@ void publish_handler(int client,char* recvBuff){
       output_log.flush();
       strcpy(commandBuff,"Message received: ");
       strcat(commandBuff,topic);
-
+      
       for(i=0;i<(int)topics.size();i++){
 	if(topics.at(i)->name == tnode_topic){
 	  if(retain)
